@@ -1,0 +1,2 @@
+[tool.setuptools]
+packages = ["pg_index_manager"]

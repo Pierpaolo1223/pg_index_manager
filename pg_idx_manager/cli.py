@@ -14,6 +14,7 @@ def is_safe_query(query: str) -> bool:
 
 def run_cli(connection):
     """Launches a persistent, continuous loop for interactive DB optimization."""
+    # min_table_rows is forced to 0 to always display raw query plan facts
     manager = IndexManagerCore(connection, min_table_rows=0)
     
     try:
@@ -50,24 +51,27 @@ def run_cli(connection):
                     try:
                         anomalies, execution_time = manager.analyze_query(query)
                         
+                        print("\n" + "="*40)
+                        print(f"📊 POSTGRESQL EXECUTION METRICS")
+                        print(f"   Execution Time: {execution_time} ms")
+                        print("="*40)
+                        
                         if not anomalies:
-                            print("\n" + "="*40)
-                            print("✅ SUCCESS: The query is properly indexed and optimized.")
-                            print(f"   Execution Time: {execution_time} ms (Index Scan active)")
+                            print(" 🎯 Scan Type: INDEX SCAN (or Index-Only Scan)")
+                            print("   Status: The query is properly using database indexes.")
                             print("="*40)
                             continue
                             
+                        print(" ℹ️  Scan Type: SEQUENTIAL SCAN (Full Table Scan)")
                         for am in anomalies:
-                            print("\n" + "="*40)
-                            print(f"⚠️ ANOMALY DETECTED: Seq Scan on table '{am['table']}'")
-                            print(f"   Execution Time: {am.get('execution_time', 0.0)} ms")
+                            print(f"   Target Table: '{am['table']}'")
                             
                             q_filter = am.get('filter')
                             if q_filter:
-                                print(f"   Offending filter clause: {q_filter}")
+                                print(f"   Applied filter clause: {q_filter}")
                             else:
-                                print("   Offending filter clause: [Full Table Scan - No filter constraint applied]")
-                            print("="*40)
+                                print("   Applied filter clause: [None - Entire table block read]")
+                        print("="*40)
                                     
                     except Exception as e:
                         connection.rollback()
@@ -82,7 +86,7 @@ def run_cli(connection):
                     print("✅ Perfect! No dead indexes found in the database catalog.")
                     continue
                     
-                print(f"⚠️ Identified {len(unused)} unused indexes slowing down write operations:")
+                print(f"ℹ️ Identified {len(unused)} unused indexes slowing down write operations:")
                 for idx in unused:
                     print(f"- '{idx['index']}' on table '{idx['table']}'")
                     confirm = input(f"  Drop index asynchronously (CONCURRENTLY)? [s/N]: ").lower().strip()

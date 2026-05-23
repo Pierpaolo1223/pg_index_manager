@@ -5,23 +5,9 @@ class IndexManagerCore:
     Core engine handling PostgreSQL index auditing and safe background cleanup.
     Does not require superuser privileges or invasive external extensions.
     """
-    def __init__(self, connection, min_table_rows=1000):
+    def __init__(self, connection, min_table_rows=0):
         self.conn = connection
-        self.min_table_rows = min_table_rows
-
-    def _get_table_rows(self, cursor, table_name):
-        """Queries PostgreSQL system catalogs to fetch live tuple statistics."""
-        try:
-            cursor.execute(
-                "SELECT n_live_tup FROM pg_stat_user_tables WHERE relname = %s", 
-                (table_name,)
-            )
-            res = cursor.fetchone()
-            # res è una tupla tipo (10000,). Estraiamo il primo elemento res[0]
-            return res[0] if res else 0
-        except Exception:
-            return 0
-
+        # min_table_rows is retained for backwards compatibility but no longer acts as a constraint
 
     def parse_explain_plan(self, node, anomalies=None):
         """Recursively traverses the EXPLAIN JSON tree to detect Sequential Scans."""
@@ -40,25 +26,23 @@ class IndexManagerCore:
 
         return anomalies
 
-    def analyze_query(self, query):
+        # Sostituisci il vecchio metodo analyze_query in core.py con questo:
+    def analyze_query(self, query, params=None):
         """
         Executes an EXPLAIN (ANALYZE, FORMAT JSON) on the target query.
-        Safely unpacks the nested driver structure without bracket syntax bugs.
+        Accepts optional bind parameters to prevent placeholder syntax errors.
         """
         anomalies_detected = []
         with self.conn.cursor() as cursor:
-            cursor.execute(f"EXPLAIN (ANALYZE, FORMAT JSON) {query}")
+            # Passiamo i parametri nativi del driver alla execute per risolvere i %s
+            cursor.execute(f"EXPLAIN (ANALYZE, FORMAT JSON) {query}", params)
             raw_result = cursor.fetchone()
             
-            # Step 1: Extract the list from the psycopg2 tuple
             if isinstance(raw_result, tuple) and len(raw_result) > 0:
                 raw_result = raw_result[0]
-            
-            # Step 2: Extract the internal dictionary from the list
             if isinstance(raw_result, list) and len(raw_result) > 0:
                 raw_result = raw_result[0]
                 
-            # Final validation: check if we successfully unpacked into a dictionary
             if not isinstance(raw_result, dict):
                 raise ValueError("Failed to parse PostgreSQL JSON plan into a dictionary configuration.")
                 
@@ -71,16 +55,10 @@ class IndexManagerCore:
             raw_anomalies = self.parse_explain_plan(plan)
             
             for anomaly in raw_anomalies:
-                table = anomaly["table"]
-                rows = self._get_table_rows(cursor, table)
-                
-                if rows >= self.min_table_rows:
-                    anomaly["table_rows"] = rows
-                    anomaly["execution_time"] = execution_time_ms
-                    anomalies_detected.append(anomaly)
+                anomaly["execution_time"] = execution_time_ms
+                anomalies_detected.append(anomaly)
                     
         return anomalies_detected, execution_time_ms
-
 
 
     def get_unused_indexes(self):

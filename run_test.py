@@ -1,8 +1,8 @@
 import psycopg2
 import random
 import string
-# Importiamo solo il Core agnostico e la CLI dalla tua libreria pulita
-from pg_index_manager import IndexManagerCore, run_cli
+# Fixed import target path pointing to the accurate directory package name
+from pg_idx_manager import IndexManagerCore, run_cli
 
 def setup_fake_data(conn):
     """Creates a table and populates it with 10,000 rows to simulate production volume."""
@@ -52,10 +52,9 @@ if __name__ == "__main__":
         setup_fake_data(conn)
         
         print("\n--- 🕵️ TESTING CORE AGNOSTIC ENGINE ---")
-        # Instanziamo il motore a sé stante passando la connessione grezza
         manager = IndexManagerCore(conn, min_table_rows=0)
         
-        # Testiamo una query non indicizzata per vedere se il motore estrae i millisecondi reali
+        # Test an unindexed query to verify real-time metrics extraction
         unindexed_query = "SELECT * FROM orders WHERE status = 'PENDING';"
         print(f"Analyzing query: {unindexed_query}")
         
@@ -65,6 +64,13 @@ if __name__ == "__main__":
             print(f"-> Engine detected a Sequential Scan on table: '{anomalies[0]['table']}'")
 
         print("\n--- 🖥️ LAUNCHING PERSISTENT INTERACTIVE CLI ---")
+        
+        # KEY FIX: Close the implicit transaction opened by analyze_query
+        conn.rollback()
+        
+        # Enable autocommit so DROP INDEX CONCURRENTLY can execute safely without transaction locks
+        conn.autocommit = True
+        
         # 2. Launch the interactive CLI to let you manage and clean up indexes manually
         run_cli(conn)
 

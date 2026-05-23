@@ -58,14 +58,20 @@ if __name__ == "__main__":
         unindexed_query = "SELECT * FROM orders WHERE status = 'PENDING';"
         print(f"Analyzing query: {unindexed_query}")
         
-        anomalies, execution_time = manager.analyze_query(unindexed_query)
-        print(f"-> Analysis complete. Execution Time calculated by Postgres: {execution_time} ms")
+        # Unpack the new third parameter containing I/O buffers statistics
+        anomalies, execution_time, io_stats = manager.analyze_query(unindexed_query)
+        
+        print(f"-> Analysis complete. Metrics calculated by Postgres:")
+        print(f"   Execution Time: {execution_time} ms")
+        print(f"   RAM Hit Blocks: {io_stats['hit']}")
+        print(f"   Disk Read Blocks: {io_stats['read']}")
+        
         if anomalies:
             print(f"-> Engine detected a Sequential Scan on table: '{anomalies[0]['table']}'")
 
         print("\n--- 🖥️ LAUNCHING PERSISTENT INTERACTIVE CLI ---")
         
-        # FIX 2: Close the implicit transaction opened during the analyze_query step
+        # Close the implicit transaction opened during the analyze_query step
         conn.rollback()
         
         # Enable autocommit so the CLI can run "DROP INDEX CONCURRENTLY" without errors

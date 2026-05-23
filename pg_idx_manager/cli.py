@@ -14,7 +14,6 @@ def is_safe_query(query: str) -> bool:
 
 def run_cli(connection):
     """Launches a persistent, continuous loop for interactive DB optimization."""
-    # min_table_rows is forced to 0 to always display raw query plan facts
     manager = IndexManagerCore(connection, min_table_rows=0)
     
     try:
@@ -49,11 +48,14 @@ def run_cli(connection):
                         continue
                     
                     try:
-                        anomalies, execution_time = manager.analyze_query(query)
+                        # 🔑 FIX: Unpack the new third parameter containing I/O statistics
+                        anomalies, execution_time, io_stats = manager.analyze_query(query)
                         
                         print("\n" + "="*40)
                         print(f"📊 POSTGRESQL EXECUTION METRICS")
                         print(f"   Execution Time: {execution_time} ms")
+                        print(f"   RAM Hit Blocks: {io_stats['hit']}")
+                        print(f"   Disk Read Blocks: {io_stats['read']}")
                         print("="*40)
                         
                         if not anomalies:

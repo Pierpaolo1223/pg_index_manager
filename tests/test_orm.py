@@ -1,16 +1,19 @@
 import logging
 import sys
+import psycopg2  # Importiamo il driver nativo per isolare il manager
 from sqlalchemy import create_engine, Column, Integer, String, Numeric, event
 from sqlalchemy.orm import declarative_base, sessionmaker
-from pg_idx_manager import IndexManagerCore
+from pg_idx_manager.core import IndexManagerCore # Corretto l'import dal file core
 
 DATABASE_URL = "postgresql+psycopg2://tester:supersecretpassword@localhost:5432/testing_perf"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-raw_dbapi_conn = engine.raw_connection().dbapi_connection
+raw_dbapi_conn = psycopg2.connect("dbname=testing_perf user=tester password=supersecretpassword host=localhost port=5432")
 manager = IndexManagerCore(raw_dbapi_conn, min_table_rows=0)
+
+_ignoring_telemetry = False
 
 class Order(Base):
     __tablename__ = "orders"
@@ -21,11 +24,18 @@ class Order(Base):
 
 @event.listens_for(engine, "before_cursor_execute")
 def receive_before_cursor_execute(conn, cursor, statement, parameters, context, executing_many):
+    global _ignoring_telemetry
+    
+    if _ignoring_telemetry:
+        return
+        
     clean_statement = statement.strip().upper()
     if clean_statement.startswith("EXPLAIN") or "PG_CATALOG" in clean_statement:
         return
 
     try:
+        _ignoring_telemetry = True
+        
         anomalies, execution_time, io_stats = manager.analyze_query(statement, parameters)
         
         print("\n" + "="*50)
@@ -51,7 +61,13 @@ def receive_before_cursor_execute(conn, cursor, statement, parameters, context, 
         print("="*50 + "\n")
         
     except Exception as e:
+        try:
+            raw_dbapi_conn.rollback()
+        except:
+            pass
         logging.warning(f"Could not audit ORM query safely: {e}")
+    finally:
+        _ignoring_telemetry = False
 
 if __name__ == "__main__":
     Base.metadata.create_all(engine)
@@ -71,3 +87,4 @@ if __name__ == "__main__":
 
     finally:
         db_session.close()
+        raw_dbapi_conn.close() 

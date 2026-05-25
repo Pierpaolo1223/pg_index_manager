@@ -1,15 +1,13 @@
 import sys
+import re
 from .core import IndexManagerCore
 
 def is_safe_query(query: str) -> bool:
     clean_query = query.strip().upper()
-    if len(clean_query) < 6:
-        return True
-    dangerous_keywords = ["DROP TABLE", "DROP DATABASE", "DELETE FROM", "INSERT INTO", "UPDATE ", "TRUNCATE "]
-    for keyword in dangerous_keywords:
-        if keyword in clean_query:
-            return False
-    return True
+    clean_query = re.sub(r'/\*.*?\*/', '', clean_query).strip()
+    clean_query = re.sub(r'--.*$', '', clean_query, flags=re.M).strip()
+    
+    return clean_query.startswith(("SELECT", "WITH"))
 
 def run_cli(connection):
     manager = IndexManagerCore(connection, min_table_rows=0)
@@ -37,14 +35,15 @@ def run_cli(connection):
                     
                     if query.lower() == 'quit':
                         manager.save_to_csv()
-                        print("\n Exiting Index Manager. Keep your database clean!")
+                        print("\nExiting Index Manager. Keep your database clean!")
                         return
                     if query.lower() == 'back':
                         break
                     if not query:
                         continue
                     if not is_safe_query(query):
-                        print("\nSECURITY ERROR: Only read-only SELECT queries are allowed for auditing.")
+                        print("\nSECURITY ERROR: Only read-only SELECT/WITH queries are allowed for auditing.")
+                        print("EXPLAIN ANALYZE executes data-modifying queries (INSERT/UPDATE/DELETE)! Blocked.")
                         continue
                     
                     try:
@@ -82,15 +81,16 @@ def run_cli(connection):
                         continue
                                 
             elif choice == "2":
-                print("\n Scanning relational schemas for unused metadata indexes...")
+                print("\nScanning relational schemas for unused metadata indexes...")
                 unused = manager.get_unused_indexes()
                 if not unused:
                     print("Perfect! No dead indexes found in the database catalog.")
                     continue
                     
-                print(f" Identified {len(unused)} unused indexes slowing down write operations:")
+                print(f"Identified {len(unused)} unused indexes slowing down write operations:")
                 for idx in unused:
-                    print(f"- '{idx['index']}' on table '{idx['table']}'")
+                    # Visualizzazione corretta usando le chiavi del dizionario restituito dal core
+                    print(f"\n- '{idx['index']}' on table '{idx['table']}' (Schema: '{idx['schema']}')")
                     confirm = input(f"  Drop index asynchronously (CONCURRENTLY)? [s/N]: ").lower().strip()
                     if confirm == 's':
                         try:
@@ -102,9 +102,9 @@ def run_cli(connection):
                     else:
                         print("  Skipped.")
             else:
-                print("\n Invalid choice. Please enter 1, 2, or 'quit'.")
+                print("\nInvalid choice. Please enter 1, 2, or 'quit'.")
 
     except KeyboardInterrupt:
         manager.save_to_csv()
-        print("\n\n [Control+C] Interrupted by user. Exiting cleanly. Goodbye!")
+        print("\n\n[Control+C] Interrupted by user. Exiting cleanly. Goodbye!")
         sys.exit(0)

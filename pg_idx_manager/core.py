@@ -9,7 +9,7 @@ class IndexManagerCore:
     def __init__(self, connection, min_table_rows=0):
         self.conn = connection
         self.csv_file = "pg_query_audit.csv"
-        self.queries_cache = {}
+        self.queries_cache = {} 
 
     def parse_explain_plan(self, node, anomalies=None, stats=None):
         if anomalies is None:
@@ -63,12 +63,18 @@ class IndexManagerCore:
         with open(self.csv_file, mode="w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
-                "execution_date", "calling_function", "query_fingerprint", 
-                "execution_time_ms", "scan_type", "ram_hit_blocks", 
-                "disk_read_blocks", "raw_sql"
+                "execution_date", 
+                "calling_function", 
+                "query_fingerprint", 
+                "execution_time_ms", 
+                "scan_type",         
+                "ram_hit_blocks", 
+                "disk_read_blocks", 
+                "raw_sql"
             ])
             for row in self.queries_cache.values():
                 writer.writerow(row)
+
 
     def analyze_query(self, query, params=None):
         anomalies_detected = []
@@ -80,7 +86,7 @@ class IndexManagerCore:
                 if not self.conn.autocommit:
                     self.conn.rollback()
             
-            if isinstance(raw_result, tuple) and len(raw_result) > 0:
+            if isinstance(raw_result, (tuple, list)) and len(raw_result) > 0:
                 raw_result = raw_result[0]
             if isinstance(raw_result, list) and len(raw_result) > 0:
                 raw_result = raw_result[0]
@@ -101,7 +107,6 @@ class IndexManagerCore:
                 anomalies_detected.append(anomaly)
             
             scan_type = "SEQUENTIAL SCAN" if anomalies_detected else "INDEX SCAN"
-            
             ram_hits = io_stats["hit"]
             disk_reads = io_stats["read"]
             
@@ -125,11 +130,11 @@ class IndexManagerCore:
         return unused
 
     def drop_index_safely(self, index_name, schema="public"):
-        sql = f"DROP INDEX CONCURRENTLY {schema}.{index_name};"
         original_autocommit = self.conn.autocommit
         try:
+            self.conn.rollback() 
             self.conn.autocommit = True
             with self.conn.cursor() as cursor:
-                cursor.execute(sql)
+                cursor.execute(f'DROP INDEX CONCURRENTLY "{schema}"."{index_name}";')
         finally:
             self.conn.autocommit = original_autocommit

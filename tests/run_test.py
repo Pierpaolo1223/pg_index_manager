@@ -2,7 +2,8 @@ import psycopg2
 import random
 import string
 import sys
-from pg_idx_manager import IndexManagerCore, run_cli
+from pg_idx_manager.core import IndexManagerCore
+from pg_idx_manager.cli import run_cli
 
 def setup_fake_data(conn):
     with conn.cursor() as cursor:
@@ -61,6 +62,8 @@ if __name__ == "__main__":
         
         if anomalies:
             print(f"-> Engine detected a Sequential Scan on table: '{anomalies[0]['table']}'")
+
+        manager.save_to_csv()
 
         print("\n--- LAUNCHING PERSISTENT INTERACTIVE CLI ---")
         

@@ -9,6 +9,9 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+raw_dbapi_conn = engine.raw_connection().dbapi_connection
+manager = IndexManagerCore(raw_dbapi_conn, min_table_rows=0)
+
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
@@ -23,9 +26,6 @@ def receive_before_cursor_execute(conn, cursor, statement, parameters, context, 
         return
 
     try:
-        raw_conn = conn.connection.dbapi_connection
-        manager = IndexManagerCore(raw_conn, min_table_rows=0)
-        
         anomalies, execution_time, io_stats = manager.analyze_query(statement, parameters)
         
         print("\n" + "="*50)
@@ -53,7 +53,6 @@ def receive_before_cursor_execute(conn, cursor, statement, parameters, context, 
     except Exception as e:
         logging.warning(f"Could not audit ORM query safely: {e}")
 
-
 if __name__ == "__main__":
     Base.metadata.create_all(engine)
     db_session = SessionLocal()
@@ -66,6 +65,9 @@ if __name__ == "__main__":
         
         print("\n[Executing ORM Query for primary key ID...]")
         id_order = db_session.query(Order).filter(Order.id == 1).first()
+
+        manager.save_to_csv()
+        print("Telemetry saved to CSV cache file successfully.")
 
     finally:
         db_session.close()

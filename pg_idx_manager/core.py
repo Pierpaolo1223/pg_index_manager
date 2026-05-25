@@ -8,6 +8,8 @@ from datetime import datetime
 class IndexManagerCore:
     def __init__(self, connection, min_table_rows=0):
         self.conn = connection
+        self.csv_file = "pg_query_audit.csv"
+        self.queries_cache = {}
 
     def parse_explain_plan(self, node, anomalies=None, stats=None):
         if anomalies is None:
@@ -39,8 +41,7 @@ class IndexManagerCore:
         sql = re.sub(r'(?<!limit )\b\d+(?:\.\d+)?\b', '?', sql)
         return sql
 
-    def log_to_csv(self, execution_time, scan_type, ram_hits, disk_reads, query):
-        csv_file = "pg_query_audit.csv"
+    def log_to_cache(self, execution_time, scan_type, ram_hits, disk_reads, query):
         current_fingerprint = self.generate_query_fingerprint(query)
         execution_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
@@ -53,46 +54,31 @@ class IndexManagerCore:
         if calling_function == "<module>":
             calling_function = "main_script_execution"
 
-        rows_to_keep = []
-        query_updated = False
+        self.queries_cache[current_fingerprint] = [
+            execution_timestamp, calling_function, current_fingerprint,
+            execution_time, scan_type, ram_hits, disk_reads, query.strip()
+        ]
 
-        if os.path.isfile(csv_file):
-            with open(csv_file, mode="r", newline="", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                next(reader, None)
-                
-                for row in reader:
-                    if row:
-                        stored_sql = row[6]
-                        stored_fingerprint = self.generate_query_fingerprint(stored_sql)
-                        
-                        if stored_fingerprint == current_fingerprint:
-                            row[0] = execution_timestamp
-                            row[1] = calling_function
-                            row[2] = execution_time
-                            row[3] = scan_type
-                            row[4] = str(ram_hits)
-                            row[5] = str(disk_reads)
-                            row[6] = query.strip()
-                            query_updated = True
-                        
-                        rows_to_keep.append(row)
-
-        with open(csv_file, mode="w", newline="", encoding="utf-8") as f:
+    def save_to_csv(self):
+        with open(self.csv_file, mode="w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["execution_date", "calling_function", "execution_time_ms", "scan_type", "ram_hit_blocks", "disk_read_blocks", "raw_sql"])
-            
-            if rows_to_keep:
-                writer.writerows(rows_to_keep)
-                
-            if not query_updated:
-                writer.writerow([execution_timestamp, calling_function, execution_time, scan_type, ram_hits, disk_reads, query.strip()])
+            writer.writerow([
+                "execution_date", "calling_function", "query_fingerprint", 
+                "execution_time_ms", "scan_type", "ram_hit_blocks", 
+                "disk_read_blocks", "raw_sql"
+            ])
+            for row in self.queries_cache.values():
+                writer.writerow(row)
 
     def analyze_query(self, query, params=None):
         anomalies_detected = []
         with self.conn.cursor() as cursor:
-            cursor.execute(f"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {query}", params)
-            raw_result = cursor.fetchone()
+            try:
+                cursor.execute(f"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {query}", params)
+                raw_result = cursor.fetchone()
+            finally:
+                if not self.conn.autocommit:
+                    self.conn.rollback()
             
             if isinstance(raw_result, tuple) and len(raw_result) > 0:
                 raw_result = raw_result[0]
@@ -119,10 +105,9 @@ class IndexManagerCore:
             ram_hits = io_stats["hit"]
             disk_reads = io_stats["read"]
             
-            self.log_to_csv(execution_time_ms, scan_type, ram_hits, disk_reads, query)
+            self.log_to_cache(execution_time_ms, scan_type, ram_hits, disk_reads, query)
                     
         return anomalies_detected, execution_time_ms, io_stats
-
 
     def get_unused_indexes(self):
         sql = """
@@ -141,6 +126,10 @@ class IndexManagerCore:
 
     def drop_index_safely(self, index_name, schema="public"):
         sql = f"DROP INDEX CONCURRENTLY {schema}.{index_name};"
-        with self.conn.cursor() as cursor:
-            cursor.execute(sql)
-            self.conn.commit()
+        original_autocommit = self.conn.autocommit
+        try:
+            self.conn.autocommit = True
+            with self.conn.cursor() as cursor:
+                cursor.execute(sql)
+        finally:
+            self.conn.autocommit = original_autocommit

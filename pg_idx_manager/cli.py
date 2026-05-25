@@ -27,6 +27,7 @@ def run_cli(connection):
             choice = input("\nSelect option (1/2 or 'quit'): ").strip().lower()
             
             if choice == "quit":
+                manager.save_to_csv()
                 print("\nExiting Index Manager. Keep your database clean!")
                 break
                 
@@ -35,6 +36,7 @@ def run_cli(connection):
                     query = input("\nPaste SQL query to analyze (type 'back' for main menu, 'quit' to exit):\n> ").strip()
                     
                     if query.lower() == 'quit':
+                        manager.save_to_csv()
                         print("\n Exiting Index Manager. Keep your database clean!")
                         return
                     if query.lower() == 'back':
@@ -73,7 +75,8 @@ def run_cli(connection):
                         print("="*40)
                                     
                     except Exception as e:
-                        connection.rollback()
+                        if not connection.autocommit:
+                            connection.rollback()
                         print(f"\n SQL SYNTAX OR DATABASE ERROR: {e}")
                         print("Please verify your table names, column names, or SQL syntax.")
                         continue
@@ -102,5 +105,6 @@ def run_cli(connection):
                 print("\n Invalid choice. Please enter 1, 2, or 'quit'.")
 
     except KeyboardInterrupt:
+        manager.save_to_csv()
         print("\n\n [Control+C] Interrupted by user. Exiting cleanly. Goodbye!")
         sys.exit(0)

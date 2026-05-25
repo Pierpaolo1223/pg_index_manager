@@ -1,12 +1,12 @@
 import psycopg2
 import random
 import string
+import sys
 from pg_idx_manager import IndexManagerCore, run_cli
 
 def setup_fake_data(conn):
-    """Creates a table and populates it with 10,000 rows to simulate production volume."""
     with conn.cursor() as cursor:
-        print("🛠️ Setting up database table and fake data...")
+        print(" Setting up database table and fake data...")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 id SERIAL PRIMARY KEY,
@@ -37,9 +37,9 @@ def setup_fake_data(conn):
         else:
             print("Database already populated.")
 
-
 if __name__ == "__main__":
     connection_string = "dbname=testing_perf user=tester password=supersecretpassword host=localhost port=5432"
+    manager = None
     
     try:
         conn = psycopg2.connect(connection_string)
@@ -64,14 +64,19 @@ if __name__ == "__main__":
 
         print("\n--- LAUNCHING PERSISTENT INTERACTIVE CLI ---")
         
-        conn.rollback()
-        
-        conn.autocommit = True
+        if not conn.autocommit:
+            conn.rollback()
         
         run_cli(conn)
 
+    except KeyboardInterrupt:
+        print("\n\n [Control+C] Interrupted by user during test execution.")
+        if manager:
+            manager.save_to_csv()
+            print(" Telemetry cache written to CSV file before exiting.")
+        sys.exit(0)
     except Exception as e:
         print(f"Test script failed: {e}")
     finally:
-        if 'conn' in locals():
+        if 'conn' in locals() and conn:
             conn.close()

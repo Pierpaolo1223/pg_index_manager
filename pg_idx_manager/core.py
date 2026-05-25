@@ -121,7 +121,6 @@ class IndexManagerCore:
             
             self.log_to_csv(execution_time_ms, scan_type, ram_hits, disk_reads, query)
                     
-        # 🔑 FIX: Return io_stats to the external caller as well
         return anomalies_detected, execution_time_ms, io_stats
 
 

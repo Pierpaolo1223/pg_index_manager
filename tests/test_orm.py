@@ -26,11 +26,10 @@ def receive_before_cursor_execute(conn, cursor, statement, parameters, context, 
         raw_conn = conn.connection.dbapi_connection
         manager = IndexManagerCore(raw_conn, min_table_rows=0)
         
-        # Unpack the new third parameter containing I/O buffers statistics
         anomalies, execution_time, io_stats = manager.analyze_query(statement, parameters)
         
         print("\n" + "="*50)
-        print(f"📊 AUTOMATIC ORM QUERY TELEMETRY")
+        print(f"   AUTOMATIC ORM QUERY TELEMETRY")
         print(f"   Execution Time: {execution_time} ms")
         print(f"   RAM Hit Blocks: {io_stats['hit']}")
         print(f"   Disk Read Blocks: {io_stats['read']}")
@@ -41,10 +40,10 @@ def receive_before_cursor_execute(conn, cursor, statement, parameters, context, 
         print("-"*50)
         
         if not anomalies:
-            print(" 🎯 Scan Type: INDEX SCAN (or Index-Only Scan)")
-            print("   Status: Optimized execution.")
+            print(" Scan Type: INDEX SCAN (or Index-Only Scan)")
+            print(" Status: Optimized execution.")
         else:
-            print(" ℹ️  Scan Type: SEQUENTIAL SCAN (Full Table Scan)")
+            print(" Scan Type: SEQUENTIAL SCAN (Full Table Scan)")
             for am in anomalies:
                 print(f"   Target Table: '{am['table']}'")
                 if am.get('filter'):
@@ -60,7 +59,7 @@ if __name__ == "__main__":
     db_session = SessionLocal()
     
     try:
-        print("🕵️ Running ORM queries... watch the console telemetry hooks!")
+        print(" Running ORM queries... watch the console telemetry hooks!")
         
         print("\n[Executing ORM Query for customer_name...]")
         user_order = db_session.query(Order).filter(Order.customer_name == "pierpaolo").first()

@@ -89,8 +89,7 @@ pip install pg_idx_manager
 Or install it in editable mode for development:
 
 ```bash
-git clone https://github.com/yourusername/pg_idx_manager.git
-cd pg_idx_manager
+git clone https://github.com/pierpaolo1223/pg_index_manager.git
 pip install -e .
 ```
 

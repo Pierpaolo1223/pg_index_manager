@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pg_idx_manager"
-version = "0.1.4"
+version = "0.1.5"
 description = "A lightweight, framework-agnostic developer linter and cleanup tool for PostgreSQL indexes."
 readme = "README.md"
 requires-python = ">=3.8"

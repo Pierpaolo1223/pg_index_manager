@@ -56,7 +56,7 @@ class IndexManagerCore:
 
         self.queries_cache[current_fingerprint] = [
             execution_timestamp, calling_function, current_fingerprint,
-            execution_time, scan_type, ram_hits, disk_reads, query.strip()
+            execution_time, scan_type, ram_hits, disk_reads, 
         ]
 
     def save_to_csv(self):
@@ -70,7 +70,6 @@ class IndexManagerCore:
                 "scan_type",         
                 "ram_hit_blocks", 
                 "disk_read_blocks", 
-                "raw_sql"
             ])
             for row in self.queries_cache.values():
                 writer.writerow(row)
